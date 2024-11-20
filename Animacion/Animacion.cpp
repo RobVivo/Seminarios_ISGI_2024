@@ -1,34 +1,37 @@
 /***************************************************
 *	Animacion.cpp
 *
-*	Codigo ejemplo para manejo del tiempo y animacion
-*   en OpenGL con GL
+*	Codigo ejemplo para animacion en OpenGL con GLUT
+*
 *
 *	@author	R.Vivo' <rvivo@upv.es>
 *
 ***************************************************/
-#define PROYECTO "Camara"
+#define PROYECTO "Animacion"
 
 #include <iostream>	
 #include <codebase.h>
 #include <sstream>
+#include <codebase.h>
 
 using namespace std;
 using namespace cb;
 
 // Variables globales
 static GLuint tetera;
-static float radioCamara = 5;
-static const int FPS = 60;
+static const int FPS = 40;
 
 // Variables dependientes del tiempo
-static float gradosTeteras = 0;
+static float gradosTetera = 0;
 static float gradosCamara = 0;
+static float radioCamara = 5;
 static Vec3 ojo = { 5,0,0 };
 
 
 void init()
 {
+	cout << "GL version " << glGetString(GL_VERSION) << endl;
+
 	// Geometria
 	tetera = glGenLists(1);
 	glNewList(tetera, GL_COMPILE);
@@ -44,22 +47,24 @@ void init()
 	glEnable(GL_DEPTH_TEST);
 }
 
-// Funcion de cálculo de los FPS y muestra
+// Funcion de muestra de FPS
 void muestraFPS()
 {
 	static int tiempoAnterior = glutGet(GLUT_ELAPSED_TIME);;
 	static int frames = 0;
+	static int antes = glutGet(GLUT_ELAPSED_TIME);
+	int ahora = glutGet(GLUT_ELAPSED_TIME);
+	float tiempoTranscurrido = (ahora - antes);
 
 	int tiempoActual = glutGet(GLUT_ELAPSED_TIME);
 	frames++;
-
-	if (tiempoActual - tiempoAnterior > 1000)
+	if (tiempoTranscurrido > 1000)
 	{
-		stringstream ss;
-		ss << "FPS: " << frames;
-		glutSetWindowTitle(ss.str().c_str());
+		stringstream titulo;
+		titulo << PROYECTO << " (FPS: " << frames << ")";
+		glutSetWindowTitle(titulo.str().c_str());
 		frames = 0;
-		tiempoAnterior = tiempoActual;
+		antes = ahora;
 	}
 }
 
@@ -85,19 +90,21 @@ void display()
 	ejes();
 
 	glPushMatrix();
-	glRotatef(gradosTeteras, 0, 1, 0);
+	glRotatef(gradosTetera, 0, 1, 0);
 	glColor3fv(AZUL);
 	glCallList(tetera);
 	glPopMatrix();
 
 	glColor3fv(VERDE);
 	glTranslatef(0, -0.5, 0);
-	glRotatef(gradosTeteras/2, 0, 1, 0);
+	glRotatef(gradosTetera / 2, 0, 1, 0);
 	glCallList(tetera);
 
 	glutSwapBuffers();
 
 	muestraFPS();
+
+	glutSwapBuffers();
 }
 
 // Funcion de atencion al redimensionamiento
@@ -122,42 +129,40 @@ void reshape(GLint w, GLint h)
 	gluPerspective(30, ra, 0.1, 10);
 }
 
-// Funcion de actualizacion de la escena
+// Funcion de actualizacion
 void update()
 {
-	// Actualizar la posicion de las teteras sin control de tiempo
-	// gradosTeteras += 0.1;
+	// Sin coherencia temporal
+	// gradosTetera += 1;
 
-	// Actualizar controlando el tiempo transcurrido
-	static const float velAngTeteras = 360; // grados por segundo
+	// Con coherencia temporal
+	static const float velAngTetera = 360; // grados por segundo
 	static const float velAngCamara = 24; // grados por segundo
 
-	static int tiempoAnterior = glutGet(GLUT_ELAPSED_TIME);
+	// Calculo del tiempo transcurrido
+	static int antes = glutGet(GLUT_ELAPSED_TIME);
+	int ahora = glutGet(GLUT_ELAPSED_TIME);
+	float tiempoTranscurrido = (ahora - antes) / 1000.0f;
 
-	int tiempoActual = glutGet(GLUT_ELAPSED_TIME);
-	float dt = (tiempoActual - tiempoAnterior) / 1000.0;
+	// Actualizacion de variables dependientes del tiempo
+	gradosTetera += velAngTetera * tiempoTranscurrido;
+	gradosCamara += velAngCamara * tiempoTranscurrido;
+	ojo = Vec3(radioCamara * cos(rad(gradosCamara)),
+		0,
+		-radioCamara * sin(rad(gradosCamara)));
 
-	gradosTeteras += velAngTeteras * dt;
-	gradosCamara += velAngCamara * dt;
+	// Actualizacion de la marca de tiempo
+	antes = ahora;
 
-	ojo.x = radioCamara * cos(rad(gradosCamara));
-	ojo.z = radioCamara * sin(rad(-gradosCamara));  // - para que gire en sentido antihorario (positivo)
-
-	//--- forma alternativa de mover el ojo alrededor de cualquier eje que pase por el origen
-	// float deltaAngCamara = velAngCamara * dt;
-	// ojo.rotate(rad(deltaAngCamara),Vec3(0,1,1));
-	//--- 
-
-	tiempoAnterior = tiempoActual;
-
-	glutPostRedisplay();
+	glutPostRedisplay();    // Encola un evento de redibujo
 }
 
-// Funcion de atencion al evento de cuenta atras
-// Genera eventos periodicos al encolarse a si misma
-void onTimer(int value)
+void onTimer(int tiempo)
 {
-	glutTimerFunc(value, onTimer, value);
+	// Generar un evento periodico cada 'tiempo' milisegundos
+	glutTimerFunc(tiempo, onTimer, tiempo);
+
+	// Actualizar la escena
 	update();
 }
 
@@ -166,7 +171,7 @@ int main(int argc, char** argv)
 	// Inicializaciones
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
-	glutInitWindowSize(500, 500);
+	glutInitWindowSize(800, 600);
 	glutInitWindowPosition(50, 50);
 
 	// Crear ventana
@@ -177,8 +182,8 @@ int main(int argc, char** argv)
 	// Registrar callbacks
 	glutDisplayFunc(display);
 	glutReshapeFunc(reshape);
-	//glutIdleFunc(update);			// Sin control de disparo
-	glutTimerFunc(1000/FPS, onTimer, 1000/FPS);	// Con control de disparo
+	// glutIdleFunc(update);
+	glutTimerFunc(1000 / FPS, onTimer, 1000 / FPS);
 
 	// Bucle de atencion a eventos
 	glutMainLoop();
